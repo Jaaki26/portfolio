@@ -5,9 +5,13 @@ pipeline {
             args '--user root -v /var/run/docker.sock:/var/run/docker.sock'
         }
     }
+
     environment {
         DOCKER_IMAGE = "janakiram26/about-me-website"
+        DOCKER_REGISTRY = "https://index.docker.io/v1/"
+        KUBE_CONFIG = credentials('kubeconfig-credentials-id') // Optional: if using kubeconfig as a secret
     }
+
     stages {
         stage('Checkout') {
             steps {
@@ -23,15 +27,15 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
-                sh 'docker build -t $DOCKER_IMAGE:latest .'
+                sh "docker build -t ${DOCKER_IMAGE}:latest ."
             }
         }
 
         stage('Push Docker Image') {
             steps {
                 script {
-                    docker.withRegistry('https://index.docker.io/v1/', 'docker-hub-credentials') {
-                        sh 'docker push $DOCKER_IMAGE:latest'
+                    docker.withRegistry("${DOCKER_REGISTRY}", 'docker-hub-credentials') {
+                        sh "docker push ${DOCKER_IMAGE}:latest"
                     }
                 }
             }
@@ -39,8 +43,26 @@ pipeline {
 
         stage('Deploy to Kubernetes') {
             steps {
-                sh 'kubectl apply -f k8s/'
+                withCredentials([file(credentialsId: 'kubeconfig-credentials-id', variable: 'KUBECONFIG')]) {
+                    sh 'kubectl apply -f k8s/'
+                }
             }
+        }
+
+        stage('Verify Deployment') {
+            steps {
+                sh 'kubectl rollout status deployment/about-me-deployment'
+                sh 'kubectl get pods -l app=about-me'
+            }
+        }
+    }
+
+    post {
+        success {
+            echo '✅ Deployment completed successfully!'
+        }
+        failure {
+            echo '❌ Pipeline failed. Check logs for details.'
         }
     }
 }
