@@ -5,10 +5,15 @@ pipeline {
             args '--user root -v /var/run/docker.sock:/var/run/docker.sock'
         }
     }
+
     environment {
         DOCKER_IMAGE = "janakiram26/about-me-website"
+        KUBE_DEPLOYMENT = "personal-website"
+        CONTAINER_NAME = "about-me"
     }
+
     stages {
+
         stage('Checkout') {
             steps {
                 git branch: 'main', url: 'https://github.com/Jaaki26/portfolio.git'
@@ -23,14 +28,18 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
-                sh "docker build -t $DOCKER_IMAGE:${BUILD_NUMBER} ."
+                sh """
+                    docker build -t $DOCKER_IMAGE:${BUILD_NUMBER} .
+                """
             }
         }
 
         stage('Push Docker Image') {
             steps {
                 withDockerRegistry([credentialsId: 'dockerhub-creds', url: 'https://index.docker.io/v1/']) {
-                    sh "docker push $DOCKER_IMAGE:${BUILD_NUMBER}"
+                    sh """
+                        docker push $DOCKER_IMAGE:${BUILD_NUMBER}
+                    """
                 }
             }
         }
@@ -38,10 +47,22 @@ pipeline {
         stage('Deploy to Kubernetes') {
             steps {
                 sh """
-                kubectl set image deployment/about-me about-me=$DOCKER_IMAGE:${BUILD_NUMBER} --record
-                kubectl rollout status deployment/about-me
+                    # Update Deployment image
+                    kubectl set image deployment/$KUBE_DEPLOYMENT $CONTAINER_NAME=$DOCKER_IMAGE:${BUILD_NUMBER} --record
+                    
+                    # Wait for rollout to complete
+                    kubectl rollout status deployment/$KUBE_DEPLOYMENT
                 """
             }
+        }
+    }
+
+    post {
+        success {
+            echo "✅ Deployment successful: ${DOCKER_IMAGE}:${BUILD_NUMBER}"
+        }
+        failure {
+            echo "❌ Pipeline failed. Check logs for errors."
         }
     }
 }
