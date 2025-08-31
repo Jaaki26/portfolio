@@ -13,8 +13,7 @@ spec:
         app: personal-website
     spec:
       containers:
-      - name: personal-website
-        image: personal-website:latest
-        ports:
-        - containerPort: 8080
-    
+        - name: about-me
+          image: janakiram26/about-me-website:{{TAG}}
+          ports:
+            - containerPort: 8080
