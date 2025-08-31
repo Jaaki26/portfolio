@@ -1,10 +1,14 @@
-pipeline {
-    agent any  // Make sure Docker + kubectl are installed on the Jenkins node
 
+pipeline {
+    agent {
+        docker {
+            image 'maven:3.9.6-eclipse-temurin-17'
+            args '--user root -v /var/run/docker.sock:/var/run/docker.sock'
+        }
+    }
     environment {
         DOCKER_IMAGE = "janakiram26/about-me-website"
     }
-
     stages {
         stage('Checkout') {
             steps {
