@@ -1,5 +1,4 @@
 FROM openjdk:17-jdk-slim
 WORKDIR /app
-COPY target/personal-website-1.0.0.jar app.jar
+COPY target/*.jar app.jar
 ENTRYPOINT ["java", "-jar", "app.jar"]
-    
