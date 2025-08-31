@@ -1,44 +1,43 @@
 pipeline {
-    agent {
-        docker {
-            image 'maven:3.9.6-eclipse-temurin-17'
-            args '--user root -v /var/run/docker.sock:/var/run/docker.sock'
-        }
-    }
+    agent any
 
     environment {
-        DOCKER_IMAGE = "janakiram26/about-me-website"
-        KUBE_DEPLOYMENT = "personal-website"
-        CONTAINER_NAME = "about-me"
+        REGISTRY = "docker.io"
+        DOCKER_USER = "janakiram26"  // 🔹 Your DockerHub username
+        IMAGE_NAME = "about-me-website"
+        APP_VERSION = "v1.${BUILD_NUMBER}"
+        KUBECONFIG_CREDENTIALS = "kubeconfig-cred" // 🔹 Add kubeconfig in Jenkins credentials
     }
 
     stages {
-
-        stage('Checkout') {
+        stage('Checkout Code') {
             steps {
-                git branch: 'main', url: 'https://github.com/Jaaki26/portfolio.git'
+                git branch: 'main', url: 'https://github.com/<your-username>/<your-repo>.git'
             }
         }
 
-        stage('Build JAR') {
+        stage('Maven Build') {
             steps {
-                sh 'mvn clean package -DskipTests'
+                sh "mvn clean package -DskipTests"
             }
         }
 
         stage('Build Docker Image') {
             steps {
                 sh """
-                    docker build -t $DOCKER_IMAGE:${BUILD_NUMBER} .
+                docker build -t $DOCKER_USER/$IMAGE_NAME:$APP_VERSION .
+                docker tag $DOCKER_USER/$IMAGE_NAME:$APP_VERSION $DOCKER_USER/$IMAGE_NAME:latest
                 """
             }
         }
 
         stage('Push Docker Image') {
             steps {
-                withDockerRegistry([credentialsId: 'dockerhub-creds', url: 'https://index.docker.io/v1/']) {
+                withCredentials([usernamePassword(credentialsId: 'docker-cred', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
                     sh """
-                        docker push $DOCKER_IMAGE:${BUILD_NUMBER}
+                    echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
+                    docker push $DOCKER_USER/$IMAGE_NAME:$APP_VERSION
+                    docker push $DOCKER_USER/$IMAGE_NAME:latest
                     """
                 }
             }
@@ -46,23 +45,15 @@ pipeline {
 
         stage('Deploy to Kubernetes') {
             steps {
-                sh """
-                    # Update Deployment image
-                    kubectl set image deployment/$KUBE_DEPLOYMENT $CONTAINER_NAME=$DOCKER_IMAGE:${BUILD_NUMBER} --record
-                    
-                    # Wait for rollout to complete
-                    kubectl rollout status deployment/$KUBE_DEPLOYMENT
-                """
+                withCredentials([file(credentialsId: "${KUBECONFIG_CREDENTIALS}", variable: 'KUBECONFIG')]) {
+                    sh """
+                    kubectl --kubeconfig=$KUBECONFIG apply -f k8s/deployment.yaml
+                    kubectl --kubeconfig=$KUBECONFIG apply -f k8s/service.yaml
+                    kubectl --kubeconfig=$KUBECONFIG apply -f k8s/ingress.yaml
+                    kubectl --kubeconfig=$KUBECONFIG rollout status deployment <your-deployment-name>
+                    """
+                }
             }
-        }
-    }
-
-    post {
-        success {
-            echo "✅ Deployment successful: ${DOCKER_IMAGE}:${BUILD_NUMBER}"
-        }
-        failure {
-            echo "❌ Pipeline failed. Check logs for errors."
         }
     }
 }
