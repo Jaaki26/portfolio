@@ -1,16 +1,19 @@
+
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: personal-website-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
 spec:
   rules:
-  - host: personal-website.local
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: personal-website-service
-            port:
-              number: 80
+    - host: personal-website.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: personal-website-service
+                port:
+                  number: 80
