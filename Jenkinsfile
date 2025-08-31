@@ -1,3 +1,4 @@
+
 pipeline {
     agent {
         docker {
@@ -9,7 +10,8 @@ pipeline {
     environment {
         DOCKER_IMAGE = "janakiram26/about-me-website"
         DOCKER_REGISTRY = "https://index.docker.io/v1/"
-        KUBE_CONFIG = credentials('kubeconfig-credentials-id') // Optional: if using kubeconfig as a secret
+        IMAGE_TAG = "${env.BUILD_NUMBER}"
+        KUBE_CONFIG = credentials('kubeconfig-credentials-id') // Ensure this matches your Jenkins credentials ID
     }
 
     stages {
@@ -27,7 +29,7 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
-                sh "docker build -t ${DOCKER_IMAGE}:latest ."
+                sh "docker build -t ${DOCKER_IMAGE}:${IMAGE_TAG} ."
             }
         }
 
@@ -35,9 +37,17 @@ pipeline {
             steps {
                 script {
                     docker.withRegistry("${DOCKER_REGISTRY}", 'docker-hub-credentials') {
-                        sh "docker push ${DOCKER_IMAGE}:latest"
+                        sh "docker push ${DOCKER_IMAGE}:${IMAGE_TAG}"
                     }
                 }
+            }
+        }
+
+        stage('Update Kubernetes Manifests') {
+            steps {
+                sh """
+                sed -i 's|{{TAG}}|${IMAGE_TAG}|g' k8s/deployment.yaml
+                """
             }
         }
 
@@ -51,18 +61,18 @@ pipeline {
 
         stage('Verify Deployment') {
             steps {
-                sh 'kubectl rollout status deployment/about-me-deployment'
-                sh 'kubectl get pods -l app=about-me'
+                sh 'kubectl rollout status deployment/personal-website'
+                sh 'kubectl get pods -l app=personal-website'
             }
         }
     }
 
     post {
         success {
-            echo '✅ Deployment completed successfully!'
+            echo "✅ Deployment of ${DOCKER_IMAGE}:${IMAGE_TAG} completed successfully!"
         }
         failure {
-            echo '❌ Pipeline failed. Check logs for details.'
+            echo "❌ Pipeline failed. Please check the logs for errors."
         }
     }
 }
