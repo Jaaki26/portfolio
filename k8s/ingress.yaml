@@ -14,4 +14,3 @@ spec:
             name: personal-website-service
             port:
               number: 80
-    
