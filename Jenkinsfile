@@ -1,29 +1,38 @@
 pipeline {
     agent {
         docker {
-            image 'janakiram26/maven-docker:latest' // Use your custom image!
+            image 'janakiram26/maven-docker:latest'
             args '--user root -v /var/run/docker.sock:/var/run/docker.sock'
         }
     }
+
+    // Parameters to make the pipeline flexible
+    parameters {
+        string(name: 'BRANCH', defaultValue: 'main', description: 'Git branch to build')
+        string(name: 'K8S_NAMESPACE', defaultValue: 'default', description: 'Kubernetes namespace')
+    }
+
     environment {
         DOCKER_IMAGE = "janakiram26/about-me-website"
+        K8S_DEPLOYMENT = "about-me"
     }
+
     stages {
         stage('Checkout') {
             steps {
-                git branch: 'main', url: 'https://github.com/Jaaki26/portfolio.git'
+                git branch: "${params.BRANCH}", url: 'https://github.com/Jaaki26/portfolio.git'
             }
         }
 
         stage('Build JAR') {
             steps {
-                sh 'mvn clean package -DskipTests'
+                sh 'mvn clean package -DskipTests -B'
             }
         }
 
         stage('Build Docker Image') {
             steps {
-                sh "docker build -t $DOCKER_IMAGE:${BUILD_NUMBER} ."
+                sh "docker build --pull -t $DOCKER_IMAGE:${BUILD_NUMBER} ."
             }
         }
 
@@ -38,10 +47,22 @@ pipeline {
         stage('Deploy to Kubernetes') {
             steps {
                 sh """
-                kubectl set image deployment/about-me about-me=$DOCKER_IMAGE:${BUILD_NUMBER} --record
-                kubectl rollout status deployment/about-me
+                kubectl -n ${params.K8S_NAMESPACE} set image deployment/$K8S_DEPLOYMENT $K8S_DEPLOYMENT=$DOCKER_IMAGE:${BUILD_NUMBER} --record
+                kubectl -n ${params.K8S_NAMESPACE} rollout status deployment/$K8S_DEPLOYMENT
                 """
             }
+        }
+    }
+
+    post {
+        success {
+            echo "Pipeline completed successfully!"
+        }
+        failure {
+            echo "Pipeline failed. Check logs for details."
+        }
+        always {
+            cleanWs()
         }
     }
 }
