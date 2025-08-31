@@ -1,4 +1,3 @@
-
 pipeline {
     agent {
         docker {
@@ -7,7 +6,6 @@ pipeline {
         }
     }
     environment {
-        DOCKERHUB_CREDENTIALS = credentials('dockerhub-creds')
         DOCKER_IMAGE = "janakiram26/about-me-website"
     }
     stages {
@@ -16,32 +14,34 @@ pipeline {
                 git branch: 'main', url: 'https://github.com/Jaaki26/portfolio.git'
             }
         }
-        stage('Build') {
+
+        stage('Build JAR') {
             steps {
                 sh 'mvn clean package -DskipTests'
             }
         }
+
         stage('Build Docker Image') {
             steps {
                 sh "docker build -t $DOCKER_IMAGE:${BUILD_NUMBER} ."
             }
         }
+
         stage('Push Docker Image') {
             steps {
-                withDockerRegistry([credentialsId: 'dockerhub-creds', url: '']) {
+                withDockerRegistry([credentialsId: 'dockerhub-creds', url: 'https://index.docker.io/v1/']) {
                     sh "docker push $DOCKER_IMAGE:${BUILD_NUMBER}"
                 }
             }
         }
-        stage('Deploy to K8s') {
-    steps {
-        sh """
-        sed -i 's|{{TAG}}|${BUILD_NUMBER}|g' k8s/deployment.yaml
-        kubectl apply -f k8s/deployment.yaml
-        kubectl apply -f k8s/service.yaml
-        kubectl apply -f k8s/ingress.yaml
-        """
-           }
+
+        stage('Deploy to Kubernetes') {
+            steps {
+                sh """
+                kubectl set image deployment/about-me about-me=$DOCKER_IMAGE:${BUILD_NUMBER} --record
+                kubectl rollout status deployment/about-me
+                """
+            }
         }
     }
 }
