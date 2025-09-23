@@ -34,7 +34,7 @@ pipeline {
         stage('Push Docker Image') {
             steps {
                 script {
-                    docker.withRegistry("${DOCKER_REGISTRY}", 'docker-hub-credentials') {
+                    docker.withRegistry("${DOCKER_REGISTRY}", 'docker-cred') {
                         sh "docker push ${DOCKER_IMAGE}:${IMAGE_TAG}"
                     }
                 }
