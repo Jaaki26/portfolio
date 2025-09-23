@@ -1,4 +1,3 @@
-
 pipeline {
     agent {
         docker {
@@ -11,7 +10,6 @@ pipeline {
         DOCKER_IMAGE = "janakiram26/about-me-website"
         DOCKER_REGISTRY = "https://index.docker.io/v1/"
         IMAGE_TAG = "${env.BUILD_NUMBER}"
-        KUBE_CONFIG = credentials('kubeconfig-credentials-id') // Replace with your actual Jenkins credentials ID
     }
 
     stages {
@@ -42,32 +40,11 @@ pipeline {
                 }
             }
         }
-
-        stage('Update Kubernetes Manifests') {
-            steps {
-                sh "sed -i 's|{{TAG}}|${IMAGE_TAG}|g' k8s/deployment.yaml"
-            }
-        }
-
-        stage('Deploy to Kubernetes') {
-            steps {
-                withCredentials([file(credentialsId: 'kubeconfig-credentials-id', variable: 'KUBECONFIG')]) {
-                    sh 'kubectl apply -f k8s/'
-                }
-            }
-        }
-
-        stage('Verify Deployment') {
-            steps {
-                sh 'kubectl rollout status deployment/personal-website'
-                sh 'kubectl get pods -l app=personal-website'
-            }
-        }
     }
 
     post {
         success {
-            echo "✅ Deployment of ${DOCKER_IMAGE}:${IMAGE_TAG} completed successfully!"
+            echo "✅ Docker image ${DOCKER_IMAGE}:${IMAGE_TAG} built and pushed successfully!"
         }
         failure {
             echo "❌ Pipeline failed. Please check the logs for errors."
